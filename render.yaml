@@ -1,0 +1,10 @@
+services:
+  - type: cron
+    name: agrobot
+    schedule: "0 8 * * *"
+    command: "python agrobot.py"
+    envVars:
+      - key: BOT_TOKEN
+        value: 8061519904:AAGI3cwN4fOVQ2sb59BkO5IwgqmkzKFm_0E
+      - key: CHAT_ID
+        value: -1002849580257
