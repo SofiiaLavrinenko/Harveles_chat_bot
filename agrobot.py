@@ -4,8 +4,8 @@ from datetime import datetime
 import os
 
 # === Telegram конфігурація
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+BOT_TOKEN = '8061519904:AAGI3cwN4fOVQ2sb59BkO5IwgqmkzKFm_0E'
+CHAT_ID = '-1002849580257'
 
 headers = {"User-Agent": "Mozilla/5.0"}
 today = datetime.now().strftime("%d.%m.%Y")
@@ -81,34 +81,49 @@ for row in soup_cake.select("tr"):
     date = f"{date_raw[6:8]}.{date_raw[4:6]}.{date_raw[:4]}"
     cake_rows.append(f"{price:<8} | {date} | {trader:<25} | {location}")
 
-# === Формуємо повідомлення
-parts = []
+# Перше повідомлення: зернові + олія
+message1_parts = []
 
 if grain_rows:
-    parts.append("<b>🌾 ЗЕРНОВІ (Dnipro region)</b>\n<pre>Культура     | Ціна     | Трейдер\n" + "-"*40)
-    parts.append("\n".join(grain_rows) + "</pre>")
+    message1_parts.append("<b>🌾 ЗЕРНОВІ (Dnipro region)</b>\n<pre>Культура     | Ціна     | Трейдер\n" + "-"*40)
+    message1_parts.append("\n".join(grain_rows) + "</pre>")
 
 if oil_rows:
-    parts.append("<b>🌻 СОНЯШНИКОВА ОЛІЯ</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
-    parts.append("\n".join(oil_rows) + "</pre>")
+    message1_parts.append("<b>🌻 СОНЯШНИКОВА ОЛІЯ</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
+    message1_parts.append("\n".join(oil_rows) + "</pre>")
+
+message1 = f"<b>📅 Ціни трейдерів на {today}</b>\n\n" + "\n\n".join(message1_parts)
+
+
+# Друге повідомлення: шрот + макуха
+message2_parts = []
 
 if meal_rows:
-    parts.append("<b>🌰 ШРОТ СОНЯШНИКОВИЙ</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
-    parts.append("\n".join(meal_rows) + "</pre>")
+    message2_parts.append("<b>🌰 ШРОТ СОНЯШНИКОВИЙ</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
+    message2_parts.append("\n".join(meal_rows) + "</pre>")
 
 if cake_rows:
-    parts.append("<b>🥧 МАКУХА СОНЯШНИКОВА</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
-    parts.append("\n".join(cake_rows) + "</pre>")
+    message2_parts.append("<b>🥧 МАКУХА СОНЯШНИКОВА</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
+    message2_parts.append("\n".join(cake_rows) + "</pre>")
 
-message = f"<b>📅 Ціни трейдерів на {today}</b>\n\n" + "\n\n".join(parts) if parts else f"⚠️ Даних на {today} не знайдено."
+message2 = "\n\n".join(message2_parts)
+def send_telegram_message(msg):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': CHAT_ID,
+        'text': msg,
+        'parse_mode': 'HTML'
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        print(f"⚠️ Помилка Telegram: {response.status_code}")
+        print("📨 Відповідь:", response.text)
 
-# === Вивід у консоль
-print("\n" + message.replace("<b>", "").replace("</b>", "").replace("<pre>", "").replace("</pre>", ""))
-
-# === Надсилання в Telegram
+# Надсилання
 if BOT_TOKEN and CHAT_ID:
-    payload = {'chat_id': CHAT_ID, 'text': message, 'parse_mode': 'HTML'}
-    response = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=payload)
-    print("\n📬 Повідомлення надіслано в Telegram." if response.status_code == 200 else f"\n⚠️ Помилка Telegram: {response.status_code}")
+    if message1.strip():
+        send_telegram_message(message1)
+    if message2.strip():
+        send_telegram_message(message2)
 else:
-    print("\n⚠️ BOT_TOKEN або CHAT_ID не задано — повідомлення не надіслано.")
+    print("⚠️ BOT_TOKEN або CHAT_ID не задано.")
