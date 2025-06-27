@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 
 # === Telegram конфігурація
@@ -8,7 +8,9 @@ BOT_TOKEN = '8061519904:AAGI3cwN4fOVQ2sb59BkO5IwgqmkzKFm_0E'
 CHAT_ID = '-1002849580257'
 
 headers = {"User-Agent": "Mozilla/5.0"}
-today = datetime.now().strftime("%d.%m.%Y")
+now = datetime.now()
+seven_days_ago = now - timedelta(days=7)
+today_str = now.strftime("%d.%m.%Y")
 
 # === 1. ЗЕРНОВІ
 url_grain = "https://agrotender.com.ua/traders/region_dnepr"
@@ -27,60 +29,41 @@ for block in soup_grain.select("div.traders__item__content"):
         if culture in ["Кукурудза", "Соя", "Ріпак", "Ячмінь", "Пшениця 1 кл."]:
             grain_rows.append(f"{culture:<10} | {value:<8} | {trader_name}")
 
-# === 2. СОНЯШНИКОВА ОЛІЯ
+# === Функція для обробки секцій з датою
+def parse_table_rows(soup):
+    rows = []
+    for row in soup.select("tr"):
+        price_tag = row.select_one("span.price")
+        trader_tag = row.select_one("span.title")
+        location_tag = row.select_one("span.location")
+        date_tag = row.select_one("span.hidden_date")
+        if not all([price_tag, trader_tag, location_tag, date_tag]):
+            continue
+        date_raw = date_tag.get("data-date")  # e.g. '20250630'
+        parsed_date = datetime.strptime(date_raw, "%Y%m%d")
+        if parsed_date < seven_days_ago:
+            continue
+        price = " ".join(price_tag.get_text().split())
+        trader = trader_tag.get_text(strip=True)
+        location = location_tag.get_text(strip=True)
+        date = parsed_date.strftime("%d.%m.%Y")
+        rows.append(f"{price:<8} | {date} | {trader:<25} | {location}")
+    return rows
+
+# === 2. Олія
 url_oil = "https://agrotender.com.ua/traders/region_ukraine/maslo_podsolnechnoe"
 soup_oil = BeautifulSoup(requests.get(url_oil, headers=headers).text, "html.parser")
-oil_rows = []
-for row in soup_oil.select("tr"):
-    price_tag = row.select_one("span.price")
-    trader_tag = row.select_one("span.title")
-    location_tag = row.select_one("span.location")
-    date_tag = row.select_one("span.hidden_date")
-    if not all([price_tag, trader_tag, location_tag, date_tag]):
-        continue
-    price = " ".join(price_tag.get_text().split())
-    trader = trader_tag.get_text(strip=True)
-    location = location_tag.get_text(strip=True)
-    date_raw = date_tag.get("data-date")
-    date = f"{date_raw[6:8]}.{date_raw[4:6]}.{date_raw[:4]}"
-    oil_rows.append(f"{price:<8} | {date} | {trader:<25} | {location}")
+oil_rows = parse_table_rows(soup_oil)
 
-# === 3. ШРОТ
+# === 3. Шрот
 url_meal = "https://agrotender.com.ua/traders/region_ukraine/shrot_podsoln"
 soup_meal = BeautifulSoup(requests.get(url_meal, headers=headers).text, "html.parser")
-meal_rows = []
-for row in soup_meal.select("tr"):
-    price_tag = row.select_one("span.price")
-    trader_tag = row.select_one("span.title")
-    location_tag = row.select_one("span.location")
-    date_tag = row.select_one("span.hidden_date")
-    if not all([price_tag, trader_tag, location_tag, date_tag]):
-        continue
-    price = " ".join(price_tag.get_text().split())
-    trader = trader_tag.get_text(strip=True)
-    location = location_tag.get_text(strip=True)
-    date_raw = date_tag.get("data-date")
-    date = f"{date_raw[6:8]}.{date_raw[4:6]}.{date_raw[:4]}"
-    meal_rows.append(f"{price:<8} | {date} | {trader:<25} | {location}")
+meal_rows = parse_table_rows(soup_meal)
 
-# === 4. МАКУХА 
+# === 4. Макуха
 url_cake = "https://agrotender.com.ua/traders/region_ukraine/zhmyh_podsoln_nizkoprot"
 soup_cake = BeautifulSoup(requests.get(url_cake, headers=headers).text, "html.parser")
-cake_rows = []
-for row in soup_cake.select("tr"):
-    price_tag = row.select_one("span.price")
-    trader_tag = row.select_one("span.title")
-    location_tag = row.select_one("span.location")
-    date_tag = row.select_one("span.hidden_date")
-    if not all([price_tag, trader_tag, location_tag, date_tag]):
-        continue
-    price = " ".join(price_tag.get_text().split())
-    trader = trader_tag.get_text(strip=True)
-    location = location_tag.get_text(strip=True)
-    date_raw = date_tag.get("data-date")
-    date = f"{date_raw[6:8]}.{date_raw[4:6]}.{date_raw[:4]}"
-    cake_rows.append(f"{price:<8} | {date} | {trader:<25} | {location}")
-
+cake_rows = parse_table_rows(soup_cake)
 # Перше повідомлення: зернові + олія
 message1_parts = []
 
@@ -92,7 +75,7 @@ if oil_rows:
     message1_parts.append("<b>🌻 СОНЯШНИКОВА ОЛІЯ</b>\n<pre>Ціна     | Дата       | Трейдер                 | Локація\n" + "-"*70)
     message1_parts.append("\n".join(oil_rows) + "</pre>")
 
-message1 = f"<b>📅 Ціни трейдерів на {today}</b>\n\n" + "\n\n".join(message1_parts)
+message1 = f"<b>📅 Ціни трейдерів на {today_str}</b>\n\n" + "\n\n".join(message1_parts)
 
 
 # Друге повідомлення: шрот + макуха
@@ -126,4 +109,4 @@ if BOT_TOKEN and CHAT_ID:
     if message2.strip():
         send_telegram_message(message2)
 else:
-    print("⚠️ BOT_TOKEN або CHAT_ID не задано.")
+  print("⚠️ BOT_TOKEN або CHAT_ID не задано.")
